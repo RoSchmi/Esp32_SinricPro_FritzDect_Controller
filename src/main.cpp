@@ -12,6 +12,9 @@
 #include "esp_task_wdt.h"
 #include <rom/rtc.h>
 
+#include "HTTPClient.h"
+#include "RsArduinoFritzApi.h"
+
 // Default Esp32 stack size of 8192 byte is not enough for some applications.
 // --> configure stack size dynamically from code to 16384
 // https://community.platformio.org/t/esp32-stack-configuration-reloaded/20994/4
@@ -265,6 +268,32 @@ void handleButtonPress()
   
 }
 
+#if TRANSPORT_PROTOCOL == 1
+    static WiFiClientSecure wifi_client;
+  #else
+    static WiFiClient wifi_client;
+  #endif
+
+
+
+HTTPClient http;
+static HTTPClient * httpPtr = &http;
+
+//Protocol protocol = Protocol::useHttps;
+Protocol protocol = Protocol::useHttp;
+
+/*
+#if TRANSPORT_PROTOCOL == 1    
+    static EthernetHttpClient  httpClient(sslClient, (char *)FRITZ_IP_ADDRESS, (TRANSPORT_PROTOCOL == 0) ? 80 : 443);
+    Protocol protocol = Protocol::useHttps;
+  #else
+    static EthernetHttpClient  httpClient(client, (char *)FRITZ_IP_ADDRESS, (TRANSPORT_PROTOCOL == 0) ? 80 : 443);
+    Protocol protocol = Protocol::useHttp;
+  #endif
+  */  
+
+  //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, &client, &sslClient, &httpClient);
+   FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, &wifi_client, &wifi_client, httpPtr);
 
 
 // forward declarations
@@ -273,7 +302,10 @@ void print_reset_reason(RESET_REASON reason);
 void setup() {
   Serial.begin(BAUD_RATE);
   //while(!Serial);
-
+  
+  
+  
+  
   pinMode(WIO_KEY_A, INPUT_PULLUP);
   pinMode(WIO_KEY_B, INPUT_PULLUP);
   pinMode(WIO_KEY_C, INPUT_PULLUP);
@@ -364,6 +396,27 @@ if (!WiFi.enableSTA(true))
   Serial.println(WiFi.localIP());
 
   setupSinricPro();
+
+  //http.begin()
+
+  if (fritz.init())
+  {
+    Serial.println("Initialization for FritzBox is done");
+  }
+  else
+  {
+    Serial.println("Initialization for FritzBox failed");
+    while (true)
+    {
+      delay(200);
+    }    
+  }
+  
+  delay(1000);
+
+  String actualSID = fritz.testSID();
+  Serial.print("Actual SID is: ");
+  Serial.println(actualSID);
   
   
 }
