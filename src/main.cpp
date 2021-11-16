@@ -293,8 +293,8 @@ Protocol protocol = Protocol::useHttp;
   */  
 
   //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, &client, &sslClient, &httpClient);
-   FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, &wifi_client, &wifi_client, httpPtr);
-
+   //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, wifi_client, http);
+   FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, wifi_client, httpPtr);
 
 // forward declarations
 void print_reset_reason(RESET_REASON reason);
@@ -395,9 +395,19 @@ if (!WiFi.enableSTA(true))
   Serial.print(F("\r\nGot Ip-Address: "));
   Serial.println(WiFi.localIP());
 
-  setupSinricPro();
+  //setupSinricPro();
 
-  //http.begin()
+  /*
+  String _ip = "fritz.box";
+  Serial.printf("http://%s%s\r\n", _ip, "/login_sid.lua");
+  Serial.print(_ip);
+  Serial.println("/login_sid.lua");
+
+  http.begin("http://" + String(_ip) + "/login_sid.lua");
+  */
+
+  Serial.println("Before init");
+
 
   if (fritz.init())
   {
@@ -414,14 +424,27 @@ if (!WiFi.enableSTA(true))
   
   delay(1000);
 
+  
+  Serial.println("Before testSID");
   String actualSID = fritz.testSID();
+
+
   Serial.print("Actual SID is: ");
+  
   Serial.println(actualSID);
+  
   
   
 }
 
 void loop() { 
+  String switchname = fritz.getSwitchName(FRITZ_DEVICE_AIN_01); 
+  Serial.printf("%s%s", F("Name of device is: "), switchname.c_str());
+  while (true)
+  {
+    Serial.println("Looping");
+    delay(3000);
+  }
   SinricPro.handle();
   delay(200);
   handleButtonPress();

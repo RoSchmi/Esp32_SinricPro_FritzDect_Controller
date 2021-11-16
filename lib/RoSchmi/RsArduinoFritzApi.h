@@ -40,7 +40,9 @@ class FritzApi {
     // Constructor: FB user, FB password, FB address (ip or 'fritz.box'), http or https, all Clients potentially used 
     // RoSchmi
     //FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, EthernetClient * client, EthernetSSLClient * sslClient, EthernetHttpClient * httpClient);
-    FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient * client, WiFiClientSecure * sslClient, HTTPClient * httpClient);
+    //Constructor
+    FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, WiFiClientSecure sslClient, HTTPClient * httpClient);
+    //FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, WiFiClientSecure sslClient);
     ~FritzApi();
 
     bool init();
@@ -91,11 +93,13 @@ class FritzApi {
     byte mynewbytes[100];
     //RoSchmi
     //EthernetHttpClient * http;
-    HTTPClient * http;
+
+    HTTPClient * instHttp;
+
 	//EthernetClient * client;
-    WiFiClient * client;   
+    WiFiClient client;   
     //EthernetSSLClient * sslClient;
-    WiFiClientSecure * sslClient;
+    WiFiClientSecure sslClient;
   
     String getChallengeResponse();
     String getSID(String response);
