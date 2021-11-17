@@ -35,13 +35,17 @@ typedef enum {
       useHttps
   } Protocol;
 
+  typedef const char* X509Certificate;
+
 class FritzApi {
   public:
     // Constructor: FB user, FB password, FB address (ip or 'fritz.box'), http or https, all Clients potentially used 
     // RoSchmi
     //FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, EthernetClient * client, EthernetSSLClient * sslClient, EthernetHttpClient * httpClient);
     //Constructor
-    FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, WiFiClientSecure sslClient, HTTPClient * httpClient);
+    FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, HTTPClient * httpClient, X509Certificate pCertificate);
+
+    
     //FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, WiFiClientSecure sslClient);
     ~FritzApi();
 
@@ -82,11 +86,13 @@ class FritzApi {
 
   private:
     Protocol _protocol;
-    uint16_t _port;
+    int _port;
     const char* _user;
     const char* _pwd;
     const char* _ip;
     String _sid;
+
+    X509Certificate _certificate;
 
     const char * homeautoswitchService = "/webservices/homeautoswitch.lua?";
     const char * login_sidService = "/login_sid.lua?";
@@ -97,7 +103,10 @@ class FritzApi {
     HTTPClient * instHttp;
 
 	//EthernetClient * client;
-    WiFiClient client;   
+    WiFiClient client;
+
+    //WiFiClient * client;
+
     //EthernetSSLClient * sslClient;
     WiFiClientSecure sslClient;
   

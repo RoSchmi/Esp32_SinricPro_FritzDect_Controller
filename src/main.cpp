@@ -13,6 +13,9 @@
 #include <rom/rtc.h>
 
 #include "HTTPClient.h"
+#include "WiFiClientSecure.h"
+
+#include "WiFiClient.h"
 #include "RsArduinoFritzApi.h"
 
 // Default Esp32 stack size of 8192 byte is not enough for some applications.
@@ -87,6 +90,39 @@ std::map<String, deviceConfig_t> devices =
   { SWITCH_ID_1, {  (int)LED_BUILTIN,  (int)BUTTON_1, 0}},
   { SWITCH_ID_2, {  (int)LED_BUILTIN, (int)BUTTON_2, 1}} 
 };
+
+//typedef const char* X509Certificate;
+
+//X509Certificate myX509Certificate = baltimore_root_ca;
+X509Certificate myX509Certificate = myfritzbox_root_ca;
+
+#if TRANSPORT_PROTOCOL == 1
+    static WiFiClientSecure wifi_client;
+    Protocol protocol = Protocol::useHttps;
+  #else
+    static WiFiClient wifi_client;
+    Protocol protocol = Protocol::useHttp;
+  #endif
+
+HTTPClient http;
+static HTTPClient * httpPtr = &http;
+
+
+/*
+#if TRANSPORT_PROTOCOL == 1    
+    static EthernetHttpClient  httpClient(sslClient, (char *)FRITZ_IP_ADDRESS, (TRANSPORT_PROTOCOL == 0) ? 80 : 443);
+    Protocol protocol = Protocol::useHttps;
+  #else
+    static EthernetHttpClient  httpClient(client, (char *)FRITZ_IP_ADDRESS, (TRANSPORT_PROTOCOL == 0) ? 80 : 443);
+    Protocol protocol = Protocol::useHttp;
+  #endif
+  */  
+
+  //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, &client, &sslClient, &httpClient);
+   //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, wifi_client, http);
+   //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, wifi_client, httpPtr);
+   FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, httpPtr, myX509Certificate);
+
 
 bool onPowerState1(const String &deviceId, bool &state)
 {
@@ -268,33 +304,8 @@ void handleButtonPress()
   
 }
 
-#if TRANSPORT_PROTOCOL == 1
-    static WiFiClientSecure wifi_client;
-  #else
-    static WiFiClient wifi_client;
-  #endif
 
-
-
-HTTPClient http;
-static HTTPClient * httpPtr = &http;
-
-//Protocol protocol = Protocol::useHttps;
-Protocol protocol = Protocol::useHttp;
-
-/*
-#if TRANSPORT_PROTOCOL == 1    
-    static EthernetHttpClient  httpClient(sslClient, (char *)FRITZ_IP_ADDRESS, (TRANSPORT_PROTOCOL == 0) ? 80 : 443);
-    Protocol protocol = Protocol::useHttps;
-  #else
-    static EthernetHttpClient  httpClient(client, (char *)FRITZ_IP_ADDRESS, (TRANSPORT_PROTOCOL == 0) ? 80 : 443);
-    Protocol protocol = Protocol::useHttp;
-  #endif
-  */  
-
-  //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, &client, &sslClient, &httpClient);
-   //FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, wifi_client, http);
-   FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, wifi_client, httpPtr);
+   
 
 // forward declarations
 void print_reset_reason(RESET_REASON reason);
