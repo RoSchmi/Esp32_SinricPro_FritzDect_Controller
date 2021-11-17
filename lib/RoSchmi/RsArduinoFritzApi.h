@@ -12,13 +12,6 @@
 
 #include <Arduino.h>
 #include <MD5.h>
-//RoSchmi
-//#include "EthernetHttpClient_SSL.h"
-//#include "NativeEthernet.h"
-
-
-//#include "Ethernet_HTTPClient/Ethernet_HttpClient.h"
-//#include "SSLClient/SSLClient.h"
 
 #define FRITZ_ERR_HTTP_COMMUNICATION  -1001
 #define FRITZ_ERR_NO_CHALLENGE        -1002
@@ -39,14 +32,10 @@ typedef enum {
 
 class FritzApi {
   public:
-    // Constructor: FB user, FB password, FB address (ip or 'fritz.box'), http or https, all Clients potentially used 
-    // RoSchmi
-    //FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, EthernetClient * client, EthernetSSLClient * sslClient, EthernetHttpClient * httpClient);
+    
     //Constructor
     FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, HTTPClient * httpClient, X509Certificate pCertificate);
-
-    
-    //FritzApi(const char* user, const char* password, const char* ip, Protocol protocol, WiFiClient client, WiFiClientSecure sslClient);
+   
     ~FritzApi();
 
     bool init();
@@ -97,19 +86,11 @@ class FritzApi {
     const char * homeautoswitchService = "/webservices/homeautoswitch.lua?";
     const char * login_sidService = "/login_sid.lua?";
     byte mynewbytes[100];
-    //RoSchmi
-    //EthernetHttpClient * http;
-
+    
     HTTPClient * instHttp;
 
-	//EthernetClient * client;
     WiFiClient client;
 
-    //WiFiClient * client;
-
-    //EthernetSSLClient * sslClient;
-    WiFiClientSecure sslClient;
-  
     String getChallengeResponse();
     String getSID(String response);
     String executeRequest(String service, String request);
