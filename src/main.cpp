@@ -27,7 +27,6 @@
   uint16_t USER_CONFIG_ARDUINO_LOOP_STACK_SIZE = 16384;
 #endif
 
-
 RESET_REASON resetReason_0;
 RESET_REASON resetReason_1;
 
@@ -36,9 +35,13 @@ uint8_t lastResetCause = 0;
 const char *ssid = IOT_CONFIG_WIFI_SSID;
 const char *password = IOT_CONFIG_WIFI_PASSWORD;
 
-bool powerState1 = false;
-bool powerState2 = false;
-bool powerState3 = false;
+//https://techtutorialsx.com/2017/08/20/esp32-arduino-freertos-queues/
+
+QueueHandle_t queue;
+
+
+volatile bool powerState1 = false;
+volatile bool powerState2 = false;
 
 typedef struct
 {
@@ -51,21 +54,15 @@ typedef struct
 #define BUTTON_1 GPIOPin
 #define BUTTON_2 GPIOPin
 
-#define WIO_KEY_A GPIOPin
-#define WIO_KEY_B GPIOPin
-#define WIO_KEY_C GPIOPin
+#define BootButton GPIOPin
 
 bool buttonPressed = false;
 
-ButtonState buttonState1;
-ButtonState buttonState2;
-ButtonState buttonState3;
+volatile ButtonState bootButtonState;
 
 #define LED_BUILTIN 2
 
 int LED1_PIN = LED_BUILTIN;
-int LED2_PIN = LED_BUILTIN;
-int LED3_PIN = LED_BUILTIN;
 
 typedef struct 
 {      
@@ -79,15 +76,16 @@ typedef struct
 // this is the main configuration
 // please put in your deviceId, the PIN for Relay and PIN for flipSwitch and an index to address the entry
 // this can be up to N devices...depending on how much pin's available on your device ;)
-// right now we have 2 devicesIds going to 1 LED and 2 flip switches (Wio Terminal left and middle Button)
+// right now we have 2 devicesIds going to 1 LED and 2 flip switches (set to the same button)
 
 std::map<String, deviceConfig_t> devices =
 {
   //{deviceId, {relayPIN,  flipSwitchPIN, index}}
-  // You have to set the pins correctly. 
+  // You have to set the pins correctly.
+  // In this App we used -1 when the relay pin shall be ignored 
 
-  { SWITCH_ID_1, {  (int)LED_BUILTIN,  (int)BUTTON_1, 0}},
-  { SWITCH_ID_2, {  (int)LED_BUILTIN, (int)BUTTON_2, 1}} 
+  { SWITCH_ID_1, {  (int)LED1_PIN,  (int)BUTTON_1, 0}},
+  { SWITCH_ID_2, {  (int)-1, (int)BUTTON_2, 1}} 
 };
 
 uint32_t millisAtLastAction;
@@ -109,6 +107,7 @@ static HTTPClient * httpPtr = &http;
 
 FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, httpPtr, myX509Certificate);
 
+// not used
 void GPIOPinISR()
 {
   buttonPressed = true;
@@ -125,10 +124,21 @@ void handleButtonPress();
 void setup() {
   Serial.begin(BAUD_RATE);
   //while(!Serial);
-  
-  pinMode(WIO_KEY_A, INPUT_PULLUP);
-  pinMode(WIO_KEY_B, INPUT_PULLUP);
-  pinMode(WIO_KEY_C, INPUT_PULLUP);
+
+  queue = xQueueCreate( 10, sizeof( int ) );
+ 
+  if(queue == NULL){
+    Serial.println("Error creating the queue");
+  }
+  else
+  {
+  Serial.println("\r\nCreated the queue");
+  }
+
+  pinMode(BootButton, INPUT_PULLUP);
+  //attachInterrupt(BootButton, GPIOPinISR, FALLING);
+
+  pinMode(LED1_PIN, OUTPUT);
 
   // Wait some time (3000 ms)
   uint32_t start = millis();
@@ -234,7 +244,7 @@ if (!WiFi.enableSTA(true))
   
   // Set time interval for commands
   millisAtLastAction = millis();
-  millisBetweenActions = 5000;
+  millisBetweenActions = 15000;
 }
 
 void loop() 
@@ -246,182 +256,98 @@ void loop()
     Serial.printf("%s%s", F("Name of device is: "), switchname.c_str());
   }
   SinricPro.handle();
-  //delay(200);
+  delay(200);
   handleButtonPress();
 }
 
 void handleButtonPress()
 {
-  if (digitalRead(WIO_KEY_C) == LOW)
-  {    
-     buttonState1.lastState = buttonState1.actState;
-     buttonState1.actState = true;
-     if (buttonState1.actState != buttonState1.lastState)
-     {      
-        powerState1 = !powerState1;
-        /*
-        spr.fillSprite(TFT_BLACK);
-        spr.setFreeFont(&FreeSansBoldOblique12pt7b);
-        tft.setTextColor(powerState1 ? TFT_YELLOW : TFT_DARKGREY, TFT_BLACK);    
-        tft.drawString(powerState1 ? " turned on" : " turned off", 120 , 70, 4);
-        */
-        digitalWrite(LED1_PIN, powerState1 ? HIGH : LOW);
-        // get Switch device back
-        SinricProSwitch& mySwitch1 = SinricPro[SWITCH_ID_1];
-        // send powerstate event      
-        mySwitch1.sendPowerStateEvent(powerState1); // send the new powerState to SinricPro server
-        Serial.print("Device ");
-        Serial.print(mySwitch1.getDeviceId().toString());
-        Serial.print(powerState1 ? "turned on" : "turned off");
-        Serial.println(" (manually via flashbutton)");
-      }
-      else
-      {
-        buttonState1.actState = false;
-      }
-  }
-
-  if (digitalRead(WIO_KEY_B) == LOW)
+  //if (digitalRead(WIO_KEY_C) == LOW)
+  if (digitalRead(BootButton) == LOW)
   {   
-     buttonState2.lastState = buttonState2.actState;
-     buttonState2.actState = true;
-     if (buttonState2.actState != buttonState2.lastState)
-     {    
-        powerState2 = !powerState2;
-        /*
-        spr.fillSprite(TFT_BLACK);
-        spr.setFreeFont(&FreeSansBoldOblique12pt7b);
-        tft.setTextColor(powerState2 ? TFT_YELLOW : TFT_DARKGREY, TFT_BLACK);
-        tft.drawString(powerState2 ? " turned on" : " turned off", 120 , 110, 4);
-        */
-        digitalWrite(LED2_PIN, powerState2 ? HIGH : LOW);
-        // get Switch device back
-        SinricProSwitch& mySwitch2 = SinricPro[SWITCH_ID_2];
-        // send powerstate event     
-        mySwitch2.sendPowerStateEvent(powerState2); // send the new powerState to SinricPro server
-        Serial.print("Device ");
-        Serial.print(mySwitch2.getDeviceId().toString());
-        Serial.print(powerState2 ? "turned on" : "turned off");
-        Serial.println(" (manually via flashbutton)");
-      }
+    bootButtonState.lastState = bootButtonState.actState;    
+    bootButtonState.actState = true;    
+    if (bootButtonState.actState != bootButtonState.lastState)
+    {      
+      powerState1 = !powerState1;     
+      digitalWrite(LED1_PIN, powerState1 ? HIGH : LOW);
+      // get Switch device back
+      SinricProSwitch& mySwitch = SinricPro[SWITCH_ID_1];
+      // send powerstate event      
+      mySwitch.sendPowerStateEvent(powerState1); // send the new powerState to SinricPro server
+      Serial.print("Device ");
+      Serial.print(mySwitch.getDeviceId().toString());
+      Serial.print(powerState1 ? " turned on" : "turned off");
+      Serial.println(" (manually via flashbutton)");
+    }     
   }
   else
   {
-    buttonState2.actState = false;
+    bootButtonState.actState = false;
   }
-  
 }
-
 
 bool onPowerState(String deviceId, bool &state)
 {
+  bool returnResult = false;
   Serial.println( String(deviceId) + String(state ? " on" : " off"));
   
-  //RoSchmi
-  //int relayPIN = devices[deviceId].relayPIN; // get the relay pin for corresponding device
-  //digitalWrite(relayPIN, state);             // set the new relay state
-  /*
+  int relayPIN = devices[deviceId].relayPIN; // get the relay pin for corresponding device
+  if (relayPIN != -1)
+  {
+     digitalWrite(relayPIN, state);      // set the new relay state
+  }
+  
   switch (devices[deviceId].index)
   {
     case 0:
     {
-      onPowerState1(deviceId, state);
+      returnResult = onPowerState1(deviceId, state);
     }
     break;
     case 1:
     {
-      onPowerState2(deviceId, state);
+      returnResult = onPowerState2(deviceId, state);
     }
-    break;
-    case 2:
-    {
-      //onPowerState3(deviceId, state);
-    }
-    break;
-    case 3:
-    {
-      //onPowerState4(deviceId, state);
-    }
-    break;
+    break; 
     default:
     {}
   }
-  */
-  return true;
+  
+  return returnResult;
 }
 
 bool onPowerState1(const String &deviceId, bool &state)
 {
   Serial.printf("Device 1 turned %s\r\n", state ? "on" : "off");
-  // RoSchmi
-  //int LED1_PIN = devices[deviceId].relayPIN; // get the relay pin for corresponding device
-  //digitalWrite(LED1_PIN, state);             // set the new relay state
-
   powerState1 = state;
-  //RoSchmi
-  //digitalWrite(LED1_PIN, powerState1 ? HIGH : LOW);
-  /*
-  spr.fillSprite(TFT_BLACK);
-  spr.setFreeFont(&FreeSansBoldOblique12pt7b);
-  spr.setTextColor(TFT_WHITE, TFT_BLACK);
-  spr.drawString("WIFI :", 10 , 5);
-  spr.setTextColor(TFT_GREEN, TFT_BLACK);
-  spr.drawString("connected", 100 , 5);
-  spr.setTextColor(TFT_WHITE, TFT_BLACK);
-  spr.drawString("Device1: ", 10, 65);
-  spr.drawString("Device2: ", 10, 105);
-  //spr.drawString("Device3: ", 10, 145);
-  tft.setTextColor(state ? TFT_YELLOW : TFT_DARKGREY, TFT_BLACK);
-  tft.drawString(state ? " turned on" : " turned off", 120 , 70, 4);
-  */
+  bootButtonState.actState = state;
   return true; // request handled properly
 }
 
 bool onPowerState2(const String &deviceId, bool &state)
 {
   Serial.printf("Device 2 turned %s\r\n", state ? "on" : "off");
-  //RoSchmi
-  //int LED2_PIN = devices[deviceId].relayPIN; // get the relay pin for corresponding device
-  //digitalWrite(LED2_PIN, state);             // set the new relay state
-
   powerState2 = state;
-  //RoSchmi
-  //digitalWrite(LED2_PIN, powerState2 ? HIGH : LOW);
-  /*
-  spr.fillSprite(TFT_BLACK);
-  spr.setFreeFont(&FreeSansBoldOblique12pt7b);
-  spr.setTextColor(TFT_WHITE, TFT_BLACK);
-  spr.drawString("WIFI :", 10 , 5);
-  spr.setTextColor(TFT_GREEN, TFT_BLACK);
-  spr.drawString("connected", 100 , 5);
-  spr.setTextColor(TFT_WHITE, TFT_BLACK);
-  spr.drawString("Device1: ", 10, 65);
-  spr.drawString("Device2: ", 10, 105);
-  //spr.drawString("Device3: ", 10, 145);
-  tft.setTextColor(state ? TFT_YELLOW : TFT_DARKGREY, TFT_BLACK);
-  tft.drawString(state ? " turned on" : " turned off", 120 , 110, 4);
-  */
   return true; // request handled properly
-  
 }
 
 void setupSinricPro()
 {
   for (auto &device : devices)
   {
+    // for each switch device defined in the map devices
+    // create a SinricProSwitch instance with its deviceId
     const char *deviceId = device.first.c_str();
-    SinricProSwitch& mySwitch1 = SinricPro[SWITCH_ID_1];    //temp
-    mySwitch1.onPowerState(onPowerState1);
-
-    SinricProSwitch& mySwitch2 = SinricPro[SWITCH_ID_2];    //light
-    mySwitch2.onPowerState(onPowerState2);
-
-    //SinricProSwitch& mySwitch3 = SinricPro[SWITCH_ID_1];    //humi
-    //mySwitch3.onPowerState(onPowerState3);
+    // doesn't matter that the name is the same for all
+    SinricProSwitch& mySwitch = SinricPro[deviceId];
+    // we take the same callback for all and distinguish according to the index in the map    
+    mySwitch.onPowerState(onPowerState);
   }
 
-  SinricPro.begin(APP_KEY, APP_SECRET);
-  SinricPro.restoreDeviceStates(true);
+  SinricPro.begin(APP_KEY, APP_SECRET); 
+  // if true, restore the last states from the Sinric Server to this local device
+  SinricPro.restoreDeviceStates(false);
 }
 
 void print_reset_reason(RESET_REASON reason)
