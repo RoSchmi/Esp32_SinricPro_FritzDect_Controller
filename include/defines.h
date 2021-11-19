@@ -304,7 +304,6 @@
 
 #define BAUD_RATE         115200                // Change baudrate to your need
 
-
 //char ssid[] = "****";        // your network SSID (name)
 //char pass[] = "****";        // your network password
 

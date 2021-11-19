@@ -1,5 +1,4 @@
 #include <Arduino.h>
-//#include "WiFiWebServer.h"
 #include "ESPAsyncWebServer.h"
 #include "defines.h"
 #include "config_secret.h"
@@ -35,13 +34,11 @@ uint8_t lastResetCause = 0;
 const char *ssid = IOT_CONFIG_WIFI_SSID;
 const char *password = IOT_CONFIG_WIFI_PASSWORD;
 
+// if a queue should be used to store commands see:
 //https://techtutorialsx.com/2017/08/20/esp32-arduino-freertos-queues/
 
-QueueHandle_t queue;
-
-
-volatile bool powerState1 = false;
-volatile bool powerState2 = false;
+bool powerState1 = false;
+bool powerState2 = false;
 
 typedef struct
 {
@@ -116,27 +113,17 @@ void GPIOPinISR()
 // forward declarations
 void print_reset_reason(RESET_REASON reason);
 bool onPowerState(String deviceId, bool &state);
-bool onPowerState2(const String &deviceId, bool &state);
-bool onPowerState1(const String &deviceId, bool &state);
-void setupSinricPro();
+bool onPowerState2(const String &deviceId, bool state);
+bool onPowerState1(const String &deviceId, bool state);
+void setupSinricPro(bool restoreStates);
 void handleButtonPress();
 
 void setup() {
   Serial.begin(BAUD_RATE);
   //while(!Serial);
 
-  queue = xQueueCreate( 10, sizeof( int ) );
- 
-  if(queue == NULL){
-    Serial.println("Error creating the queue");
-  }
-  else
-  {
-  Serial.println("\r\nCreated the queue");
-  }
-
   pinMode(BootButton, INPUT_PULLUP);
-  //attachInterrupt(BootButton, GPIOPinISR, FALLING);
+  //attachInterrupt(BootButton, GPIOPinISR, FALLING);  // not used
 
   pinMode(LED1_PIN, OUTPUT);
 
@@ -221,8 +208,6 @@ if (!WiFi.enableSTA(true))
   Serial.print(F("\r\nGot Ip-Address: "));
   Serial.println(WiFi.localIP());
 
-  setupSinricPro();
-
   if (fritz.init())
   {
     Serial.println("Initialization for FritzBox is done");
@@ -235,14 +220,28 @@ if (!WiFi.enableSTA(true))
       delay(200);
     }    
   }
-  
+  //If wanted, printout SID
+  //Serial.printf("Actual SID is: %s\r\n", String(fritz.testSID()).c_str());
+
+  bool restoreStatesFromServer = false;
+  setupSinricPro(restoreStatesFromServer);
+
   delay(1000);
 
-  String actualSID = fritz.testSID();
-  Serial.print("Actual SID is: ");
-  Serial.println(actualSID);
+  if (!restoreStatesFromServer)
+  { 
+    bool actualSocketState = fritz.getSwitchState(FRITZ_DEVICE_AIN_01);
+    
+    onPowerState1(SWITCH_ID_1, actualSocketState);  // once more switch Fritz!Dect socket to actual state  
+
+    // get Switch device back
+    SinricProSwitch& mySwitch = SinricPro[SWITCH_ID_1];
+    // send powerstate event      
+    mySwitch.sendPowerStateEvent(actualSocketState); // send the actual powerState to SinricPro server
+    Serial.println("State from Fritz!Dect was transmitted to server"); 
+  }
   
-  // Set time interval for commands
+  // Set time interval for repeating commands
   millisAtLastAction = millis();
   millisBetweenActions = 15000;
 }
@@ -253,7 +252,7 @@ void loop()
   {
      millisAtLastAction = millis();
      String switchname = fritz.getSwitchName(FRITZ_DEVICE_AIN_01); 
-    Serial.printf("%s%s", F("Name of device is: "), switchname.c_str());
+    Serial.printf("Name of device is: %s", switchname.c_str());
   }
   SinricPro.handle();
   delay(200);
@@ -262,23 +261,20 @@ void loop()
 
 void handleButtonPress()
 {
-  //if (digitalRead(WIO_KEY_C) == LOW)
   if (digitalRead(BootButton) == LOW)
   {   
     bootButtonState.lastState = bootButtonState.actState;    
-    bootButtonState.actState = true;    
-    if (bootButtonState.actState != bootButtonState.lastState)
-    {      
-      powerState1 = !powerState1;     
-      digitalWrite(LED1_PIN, powerState1 ? HIGH : LOW);
-      // get Switch device back
-      SinricProSwitch& mySwitch = SinricPro[SWITCH_ID_1];
-      // send powerstate event      
-      mySwitch.sendPowerStateEvent(powerState1); // send the new powerState to SinricPro server
-      Serial.print("Device ");
-      Serial.print(mySwitch.getDeviceId().toString());
-      Serial.print(powerState1 ? " turned on" : "turned off");
-      Serial.println(" (manually via flashbutton)");
+    bootButtonState.actState = true;
+    if (bootButtonState.actState != bootButtonState.lastState)  // if has toggled
+    {     
+      if (onPowerState1(SWITCH_ID_1, !powerState1))             // switch Fritz!Dect socket
+      {       
+        // get Switch device back
+        SinricProSwitch& mySwitch = SinricPro[SWITCH_ID_1];
+        // send powerstate event      
+        mySwitch.sendPowerStateEvent(powerState1); // send the new powerState to SinricPro server
+        Serial.println("(Switched manually via flashbutton)");        
+      }    
     }     
   }
   else
@@ -290,14 +286,7 @@ void handleButtonPress()
 bool onPowerState(String deviceId, bool &state)
 {
   bool returnResult = false;
-  Serial.println( String(deviceId) + String(state ? " on" : " off"));
-  
-  int relayPIN = devices[deviceId].relayPIN; // get the relay pin for corresponding device
-  if (relayPIN != -1)
-  {
-     digitalWrite(relayPIN, state);      // set the new relay state
-  }
-  
+  //Serial.println( String(deviceId) + String(state ? " on" : " off")); 
   switch (devices[deviceId].index)
   {
     case 0:
@@ -313,26 +302,51 @@ bool onPowerState(String deviceId, bool &state)
     default:
     {}
   }
-  
   return returnResult;
 }
 
-bool onPowerState1(const String &deviceId, bool &state)
+bool onPowerState1(const String &deviceId, bool state)
 {
-  Serial.printf("Device 1 turned %s\r\n", state ? "on" : "off");
-  powerState1 = state;
-  bootButtonState.actState = state;
-  return true; // request handled properly
+  bool returnResult = false;
+  if (state == true)
+  {
+    returnResult = fritz.setSwitchOn(FRITZ_DEVICE_AIN_01);
+  }
+  else
+  {
+    returnResult = !fritz.setSwitchOff(FRITZ_DEVICE_AIN_01);
+  }
+  if (returnResult == true)
+  {
+    int relayPIN = devices[deviceId].relayPIN; // get the relay pin for corresponding device
+    if (relayPIN != -1)
+    {
+      digitalWrite(relayPIN, state);      // set the new relay state
+    }
+    Serial.printf("Device 1 turned %s\r\n", state ? "on" : "off");
+    powerState1 = state;
+    bootButtonState.actState = state;    
+  }
+  else
+  {
+    Serial.printf("Failed to turn Device 1 %s\r\n", state ? "on" : "off");
+    //powerState1 = state;
+    //bootButtonState.actState = state;  
+  }    
+  return returnResult; // request handled properly
 }
 
-bool onPowerState2(const String &deviceId, bool &state)
+bool onPowerState2(const String &deviceId, bool state)
 {
   Serial.printf("Device 2 turned %s\r\n", state ? "on" : "off");
   powerState2 = state;
   return true; // request handled properly
 }
 
-void setupSinricPro()
+// Create devices in Sinric Pro
+// restoreStates: true means:
+// restore the last states from the Sinric Server to this local device
+void setupSinricPro(bool restoreStates)
 {
   for (auto &device : devices)
   {
@@ -347,7 +361,8 @@ void setupSinricPro()
 
   SinricPro.begin(APP_KEY, APP_SECRET); 
   // if true, restore the last states from the Sinric Server to this local device
-  SinricPro.restoreDeviceStates(false);
+  
+  SinricPro.restoreDeviceStates(restoreStates);
 }
 
 void print_reset_reason(RESET_REASON reason)
