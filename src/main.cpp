@@ -1,3 +1,23 @@
+// Program 'Esp32_SinricPro_FritzDect_Controller'
+// Cpoyright RoSchmi 2021, License Apache 2.0
+
+// Before you can start:
+// Define WiFi-Credentials, FritzBox-Credentials and Sinric Pro Credentials
+// in file 'config_secrte.h' (take 'config_secret_template.h' as a template)
+
+// Define 'TRANSPORT_PROTOCOL' (http or https) in file config.h
+// When you begin to work with this App set TRANSPORT_PROTOCOL = 0 (http)
+// The https secured connection will not work before you include the specific
+// certificate of your personal FritzBox in 'config.h'
+// Instructions how to get the certificate are given in the file 'config.h'
+// When you have included the correct certificate, set TRANSPORT_PROTOCOL = 1
+
+// The FRITZ_DEVICE_AIN can be found on your Fritz!Dect 200 powersocket
+// To get the Sinric Pro Credentials have a look at:
+// https://sinric.pro/de-index.html
+// https://sinricpro.github.io/esp8266-esp32-sdk/index.html
+// https://github.com/sinricpro
+
 #include <Arduino.h>
 #include "ESPAsyncWebServer.h"
 #include "defines.h"
@@ -102,6 +122,7 @@ X509Certificate myX509Certificate = myfritzbox_root_ca;
 HTTPClient http;
 static HTTPClient * httpPtr = &http;
 
+uint64_t loopCounter = 0;
 String fritz_SID = "";
 FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, httpPtr, myX509Certificate);
 
@@ -160,7 +181,26 @@ void setup() {
   {
     delay(10);
   }
-  
+
+  #if WORK_WITH_WATCHDOG == 1
+  // Start watchdog with 20 seconds
+  if (esp_task_wdt_init(20, true) == ESP_OK)
+  {
+    Serial.println(F("Watchdog enabled with interval of 20 sec"));
+  }
+  else
+  {
+    Serial.println(F("Failed to enable watchdog"));
+  }
+  esp_task_wdt_add(NULL);
+
+  //https://www.az-delivery.de/blogs/azdelivery-blog-fur-arduino-und-raspberry-pi/watchdog-und-heartbeat
+
+  //https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/system/wdts.html
+  #endif 
+
+
+
   //Set WiFi to station mode and disconnect from an AP if it was previously connected
   WiFi.mode(WIFI_STA);
   Serial.println(F("First disconnecting, then\r\nConnecting to WiFi-Network"));
@@ -173,15 +213,15 @@ void setup() {
   WiFi.begin(ssid, password);
 
 if (!WiFi.enableSTA(true))
-{
-  while (true)
-  {
-    // Stay in endless loop to reboot
+{     
     Serial.println("Connect failed.");
     delay(10 * 1000);  // Reboot after 10 seconds
-    esp_task_wdt_reset(); 
-  }
+    ESP.restart(); 
 }
+
+#if WORK_WITH_WATCHDOG == 1
+      esp_task_wdt_reset();
+#endif 
 
 // not tested
 #if USE_STATIC_IP == 1
@@ -213,13 +253,13 @@ if (!WiFi.enableSTA(true))
 
   if (fritz.init())
   {
-    Serial.println(F("Initialization for FritzBox is succeeded"));
+    Serial.println(F("Initialization for FritzBox succeeded"));
   }
   else
   {
     Serial.println(F("Initialization for FritzBox failed, rebooting"));
     delay(10 * 1000); // 10 seconds
-    esp_task_wdt_reset();    
+    ESP.restart();  
   }
   fritz_SID = fritz.testSID();
   //If wanted, printout SID
@@ -253,8 +293,17 @@ if (!WiFi.enableSTA(true))
 
 void loop() 
 { 
+  if (++loopCounter % 100000 == 0)   // Reset watchdog every 100000 th round
+  {
+    //Serial.println("Reset WDG");   
+    #if WORK_WITH_WATCHDOG == 1
+      esp_task_wdt_reset();
+    #endif
+  }
   if ((millis() - millisAtLastAction) > millisBetweenActions) // time interval expired?
   {
+    
+     //Serial.println(F("Testing SID"));
      millisAtLastAction = millis();
      if (fritz_SID != fritz.testSID())
      {
@@ -267,14 +316,13 @@ void loop()
         {
           Serial.println(F("Re-init for FritzBox failed, rebooting"));
           delay(10 * 1000); // 10 seconds
-          esp_task_wdt_reset();   
+          ESP.restart();  
         }
      }
      //String switchname = fritz.getSwitchName(FRITZ_DEVICE_AIN_01); 
      //Serial.printf("Name of device is: %s", switchname.c_str());
   }
   SinricPro.handle();
-  delay(200);
   handleButtonPress();
 }
 
