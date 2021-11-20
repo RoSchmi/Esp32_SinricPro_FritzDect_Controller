@@ -7,8 +7,8 @@
 // For the MD5 hash calculation the used way was taken from
 // https://github.com/schuppeste/Arduino-Fritzbox-Login
 
-#ifndef RS_ARDUINO_FRITZ_API_H
-#define RS_ARDUINO_FRITZ_API_H
+#ifndef RS_HTTP_FRITZ_API_H
+#define RS_HTTP_FRITZ_API_H
 
 #include <Arduino.h>
 #include <MD5.h>
@@ -99,6 +99,6 @@ class FritzApi {
 	//double convertTemperature(String result); 
 };
 
-#include "RsArduinoFritzApi_Impl.h"
+#include "RsHttpFritzApi_Impl.h"
 
-#endif // RS_ARDUINO_FRITZ_API_H
+#endif // RS_HTTP_FRITZ_API_H

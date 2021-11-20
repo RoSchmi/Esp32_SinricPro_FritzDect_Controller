@@ -15,7 +15,7 @@
 #include "WiFiClientSecure.h"
 
 #include "WiFiClient.h"
-#include "RsArduinoFritzApi.h"
+#include "RsHttpFritzApi.h"
 
 // Default Esp32 stack size of 8192 byte is not enough for some applications.
 // --> configure stack size dynamically from code to 16384
@@ -51,11 +51,11 @@ typedef struct
 #define BUTTON_1 GPIOPin
 #define BUTTON_2 GPIOPin
 
-#define BootButton GPIOPin
+#define FlashButton GPIOPin
 
 bool buttonPressed = false;
 
-volatile ButtonState bootButtonState;
+volatile ButtonState flashButtonState;
 
 #define LED_BUILTIN 2
 
@@ -102,6 +102,7 @@ X509Certificate myX509Certificate = myfritzbox_root_ca;
 HTTPClient http;
 static HTTPClient * httpPtr = &http;
 
+String fritz_SID = "";
 FritzApi fritz((char *)FRITZ_USER, (char *)FRITZ_PASSWORD, FRITZ_IP_ADDRESS, protocol, wifi_client, httpPtr, myX509Certificate);
 
 // not used
@@ -122,8 +123,8 @@ void setup() {
   Serial.begin(BAUD_RATE);
   //while(!Serial);
 
-  pinMode(BootButton, INPUT_PULLUP);
-  //attachInterrupt(BootButton, GPIOPinISR, FALLING);  // not used
+  pinMode(FlashButton, INPUT_PULLUP);
+  //attachInterrupt(FlashButton, GPIOPinISR, FALLING);  // not used
 
   pinMode(LED1_PIN, OUTPUT);
 
@@ -175,12 +176,14 @@ if (!WiFi.enableSTA(true))
 {
   while (true)
   {
-    // Stay in endless loop to reboot through Watchdog
+    // Stay in endless loop to reboot
     Serial.println("Connect failed.");
-    delay(1000);
+    delay(10 * 1000);  // Reboot after 10 seconds
+    esp_task_wdt_reset(); 
   }
 }
 
+// not tested
 #if USE_STATIC_IP == 1
   if (!WiFi.config(presetIp, presetGateWay, presetSubnet, presetDnsServer1, presetDnsServer2))
   {
@@ -210,19 +213,21 @@ if (!WiFi.enableSTA(true))
 
   if (fritz.init())
   {
-    Serial.println("Initialization for FritzBox is done");
+    Serial.println(F("Initialization for FritzBox is succeeded"));
   }
   else
   {
-    Serial.println("Initialization for FritzBox failed");
-    while (true)
-    {
-      delay(200);
-    }    
+    Serial.println(F("Initialization for FritzBox failed, rebooting"));
+    delay(10 * 1000); // 10 seconds
+    esp_task_wdt_reset();    
   }
+  fritz_SID = fritz.testSID();
   //If wanted, printout SID
-  //Serial.printf("Actual SID is: %s\r\n", String(fritz.testSID()).c_str());
+  //Serial.printf("Actual SID is: %s\r\n", fritz_SID.c_str());
 
+  // if true: when the device connects to the server the sever will
+  // send the last states of the switch to the device
+  // if false: the device will actualize the server to the state just beeing present on the device
   bool restoreStatesFromServer = false;
   setupSinricPro(restoreStatesFromServer);
 
@@ -243,7 +248,7 @@ if (!WiFi.enableSTA(true))
   
   // Set time interval for repeating commands
   millisAtLastAction = millis();
-  millisBetweenActions = 15000;
+  millisBetweenActions = 60 * 1000;  //to refresh fritz_SID every minute
 }
 
 void loop() 
@@ -251,8 +256,22 @@ void loop()
   if ((millis() - millisAtLastAction) > millisBetweenActions) // time interval expired?
   {
      millisAtLastAction = millis();
-     String switchname = fritz.getSwitchName(FRITZ_DEVICE_AIN_01); 
-    Serial.printf("Name of device is: %s", switchname.c_str());
+     if (fritz_SID != fritz.testSID())
+     {
+        if (fritz.init())
+        {
+          fritz_SID = fritz.testSID();
+          Serial.println(F("Re-init for FritzBox succeeded"));
+        }
+        else
+        {
+          Serial.println(F("Re-init for FritzBox failed, rebooting"));
+          delay(10 * 1000); // 10 seconds
+          esp_task_wdt_reset();   
+        }
+     }
+     //String switchname = fritz.getSwitchName(FRITZ_DEVICE_AIN_01); 
+     //Serial.printf("Name of device is: %s", switchname.c_str());
   }
   SinricPro.handle();
   delay(200);
@@ -261,11 +280,11 @@ void loop()
 
 void handleButtonPress()
 {
-  if (digitalRead(BootButton) == LOW)
+  if (digitalRead(FlashButton) == LOW)
   {   
-    bootButtonState.lastState = bootButtonState.actState;    
-    bootButtonState.actState = true;
-    if (bootButtonState.actState != bootButtonState.lastState)  // if has toggled
+    flashButtonState.lastState = flashButtonState.actState;    
+    flashButtonState.actState = true;
+    if (flashButtonState.actState != flashButtonState.lastState)  // if has toggled
     {     
       if (onPowerState1(SWITCH_ID_1, !powerState1))             // switch Fritz!Dect socket
       {       
@@ -279,7 +298,7 @@ void handleButtonPress()
   }
   else
   {
-    bootButtonState.actState = false;
+    flashButtonState.actState = false;
   }
 }
 
@@ -325,13 +344,13 @@ bool onPowerState1(const String &deviceId, bool state)
     }
     Serial.printf("Device 1 turned %s\r\n", state ? "on" : "off");
     powerState1 = state;
-    bootButtonState.actState = state;    
+    flashButtonState.actState = state;    
   }
   else
   {
     Serial.printf("Failed to turn Device 1 %s\r\n", state ? "on" : "off");
     //powerState1 = state;
-    //bootButtonState.actState = state;  
+    //flashButtonState.actState = state;  
   }    
   return returnResult; // request handled properly
 }

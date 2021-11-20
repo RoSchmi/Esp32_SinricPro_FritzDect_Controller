@@ -1,18 +1,15 @@
 // Copyright RoSchmi 2021, License MIT
 // https://github.com/RoSchmi/Teensy/tree/master/Proj/Teens41_FritzBox_FritzDect
 
-// This is an adaption/modification of:
+// Parts of the code were taken from:
 // https://github.com/planetk/ArduinoFritzApi 
 
 // For the MD5 hash calculation the used way was taken from
 // https://github.com/schuppeste/Arduino-Fritzbox-Login
 
 #include <Arduino.h>
-#include "RsArduinoFritzApi.h"
-//RoSchmi
-//#include "EthernetHttpClient_SSL.h"
+#include "RsHttpFritzApi.h"
 
-//RoSchmi
 // constructor
 FritzApi::FritzApi(const char* user, const char* password, const char * ip, Protocol protocol, WiFiClient pClient, HTTPClient * pHttp, X509Certificate pCertificate) 
 { 
