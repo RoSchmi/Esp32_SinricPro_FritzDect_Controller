@@ -11,15 +11,15 @@
 
 // Define other settings according to your needs
 
-// The credentials of your WiFi router has to be set in the file config_secret.h 
+// The credentials of your WiFi router have to be set in the file config_secret.h 
 
 
 #define SERIAL_PRINT 1                     // 1 = yes, 0 = no. Select if Serial.print messages are printed 
 
-#define TRANSPORT_PROTOCOL 0      // 0 = http, 1 = https
-
-// not yet implemented                                         
-#define WORK_WITH_WATCHDOG 1               // 1 = yes, 0 = no, Watchdog is used (1) or not used (0)
+#define TRANSPORT_PROTOCOL 0        // 0 = http, 1 = https
+                                    // should be 1 for normal operation and 0 for testing
+                                    
+#define WORK_WITH_WATCHDOG 0               // 1 = yes, 0 = no, Watchdog is used (1) or not used (0)
                                            // should be 1 for normal operation and 0 for testing
 // not tested if it works
 #define USE_STATIC_IP 0                 // 1 = use static IpAddress, 0 = use DHCP

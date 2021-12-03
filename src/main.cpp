@@ -108,7 +108,6 @@ std::map<String, deviceConfig_t> devices =
 uint32_t millisAtLastAction;
 uint32_t millisBetweenActions = 10000;
 
-//X509Certificate myX509Certificate = baltimore_root_ca;
 X509Certificate myX509Certificate = myfritzbox_root_ca;
 
 #if TRANSPORT_PROTOCOL == 1
@@ -173,8 +172,7 @@ void setup() {
   Serial.print(BOARD_NAME);
   Serial.print(F(" with "));
   Serial.println(SHIELD_TYPE); 
-  //Serial.println(WIFI_WEBSERVER_VERSION);
-
+  
   // Wait some time (3000 ms)
   start = millis();
   while ((millis() - start) < 3000)
@@ -283,7 +281,7 @@ if (!WiFi.enableSTA(true))
     SinricProSwitch& mySwitch = SinricPro[SWITCH_ID_1];
     // send powerstate event      
     mySwitch.sendPowerStateEvent(actualSocketState); // send the actual powerState to SinricPro server
-    Serial.println("State from Fritz!Dect was transmitted to server"); 
+    Serial.println("PowerState from Fritz!Dect was transmitted to server"); 
   }
   
   // Set time interval for repeating commands
@@ -318,9 +316,7 @@ void loop()
           delay(10 * 1000); // 10 seconds
           ESP.restart();  
         }
-     }
-     //String switchname = fritz.getSwitchName(FRITZ_DEVICE_AIN_01); 
-     //Serial.printf("Name of device is: %s", switchname.c_str());
+     }  
   }
   SinricPro.handle();
   handleButtonPress();
