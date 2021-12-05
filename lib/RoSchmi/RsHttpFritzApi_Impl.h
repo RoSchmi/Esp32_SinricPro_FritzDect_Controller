@@ -139,7 +139,9 @@ String FritzApi::getChallengeResponse()
   free(hash);
 
   return challenge + "-" + md5str; 
-} 
+}
+
+
 
 String FritzApi::getSID(String response) 
 { 
@@ -171,6 +173,24 @@ String FritzApi::getSID(String response)
   return sid;
 }
 
+bool FritzApi::startRingTest(int phoneNo)
+{
+  char cmdSuffix[100] {0};
+  sprintf((char *)cmdSuffix, "idx=%d&%s%s&ring_tone_radio_test=0&startringtest=2", phoneNo, "sid=", (char *)_sid.c_str());
+  String result = executeRequest(fon_devices_EditDectRingToneService, cmdSuffix);
+  bool returnResult = result == "startringtest2" ? true : false;
+  return returnResult;
+}
+
+bool FritzApi::stopRingTest(int phoneNo)
+{
+  char cmdSuffix[100] {0};
+  sprintf((char *)cmdSuffix, "idx=%d&%s%s&stopringtest=1&ringtone&startringtest=0", phoneNo, "sid=", (char *)_sid.c_str());
+  String result = executeRequest(fon_devices_EditDectRingToneService, cmdSuffix);
+  bool returnResult = result == "stopringtest" ? true : false;
+  return returnResult;
+}
+
 String FritzApi::testSID()
 { 
   char cmdSuffix[100] {0};
@@ -178,7 +198,9 @@ String FritzApi::testSID()
   String result = executeRequest(login_sidService, cmdSuffix);
   String sid = result.substring(result.indexOf("<SID>") + 5,  result.indexOf("</SID>"));
   return sid;
-} 
+}
+
+
 
 String FritzApi::getSwitchName(String ain) {
   char cmdSuffix[100] {0};
@@ -266,7 +288,7 @@ String FritzApi::executeRequest(String service, String command)
   
   String protocolPrefix = _port == 80 ? "http://" : "https://";
   bool useTls = _port == 80 ? false : true;
-
+  
   instHttp->begin(client, protocolPrefix + String(_ip), _port, aUrlPath, useTls);
   
   int retCode = instHttp->GET();

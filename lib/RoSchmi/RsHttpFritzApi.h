@@ -60,6 +60,10 @@ class FritzApi {
     double getTemperature(String ain);
 	// Get name of an actor
 	String getSwitchName(String ain);
+    // Start ringing on a phone (Alarm)
+    bool startRingTest(int phoneNo);
+    // Stop ringing on a phone 
+    bool stopRingTest(int phoneNo);
 
     // The Thermostat functions are actually not implemented
     /*
@@ -82,9 +86,11 @@ class FritzApi {
     String _sid;
 
     X509Certificate _certificate;
-
+    
+    const char * fon_devices_EditDectRingToneService = "/fon_devices/edit_dect_ring_tone.lua?";
     const char * homeautoswitchService = "/webservices/homeautoswitch.lua?";
     const char * login_sidService = "/login_sid.lua?";
+
     byte mynewbytes[100];
     
     HTTPClient * instHttp;
